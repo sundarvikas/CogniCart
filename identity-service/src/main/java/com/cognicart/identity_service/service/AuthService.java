@@ -5,6 +5,8 @@ import com.cognicart.identity_service.dto.RegisterRequest;
 import com.cognicart.identity_service.entity.RefreshToken;
 import com.cognicart.identity_service.entity.Role;
 import com.cognicart.identity_service.entity.User;
+import com.cognicart.identity_service.event.UserEventProducer;
+import com.cognicart.identity_service.event.UserRegisteredEvent;
 import com.cognicart.identity_service.exception.CustomException;
 import com.cognicart.identity_service.repository.RefreshTokenRepository;
 import com.cognicart.identity_service.repository.RoleRepository;
@@ -12,6 +14,8 @@ import com.cognicart.identity_service.repository.UserRepository;
 import com.cognicart.identity_service.security.JwtService;
 
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,15 +27,21 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthService {
 
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final UserEventProducer userEventProducer;
 
     public String register(RegisterRequest request) {
 
+        log.info("User {} attempting registration", request.getEmail());
+
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+            log.warn("Registration failed: Email {} already exists", request.getEmail());
             throw new CustomException("Email already exists");
         }
 
@@ -48,17 +58,52 @@ public class AuthService {
 
         userRepository.save(user);
 
+        log.info("User {} registered successfully", request.getEmail());
+
+        userEventProducer.publishUserRegisteredEvent(
+                UserRegisteredEvent.builder()
+                        .userId(user.getId().toString())
+                        .email(user.getEmail())
+                        .role(user.getRole().getName())
+                        .build()
+        );
+
         return "User registered successfully";
     }
     @Transactional
     public Map<String, String> login(LoginRequest request) {
 
+        log.info("User {} attempting login", request.getEmail());
+
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new CustomException("Invalid credentials"));
 
+        // Check if account is locked
+        if (user.isAccountLocked()) {
+            log.warn("Login failed: Account {} is locked", request.getEmail());
+            throw new CustomException("Account is locked. Try later.");
+        }
+
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            // Increment failed attempts
+            user.setFailedAttempts(user.getFailedAttempts() + 1);
+
+            // Lock account after 5 failed attempts
+            if (user.getFailedAttempts() >= 5) {
+                user.setAccountLocked(true);
+            }
+            userRepository.save(user);
+
+            log.warn("Login failed: Invalid credentials for {}", request.getEmail());
+
             throw new CustomException("Invalid credentials");
         }
+
+        // Reset failed attempts on successful login
+        user.setFailedAttempts(0);
+        userRepository.save(user);
+
+        log.info("User {} logged in successfully", request.getEmail());
 
         String accessToken = jwtService.generateAccessToken(
                 user.getEmail(),

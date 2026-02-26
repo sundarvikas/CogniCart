@@ -32,4 +32,12 @@ public class User {
     private Role role;
 
     private LocalDateTime createdAt;
+
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    @lombok.Builder.Default
+    private int failedAttempts = 0;
+
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    @lombok.Builder.Default
+    private boolean accountLocked = false;
 }
