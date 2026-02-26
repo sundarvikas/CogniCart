@@ -1,5 +1,6 @@
 package com.cognicart.identity_service.controller;
 
+import com.cognicart.identity_service.dto.LoginRequest;
 import com.cognicart.identity_service.dto.RegisterRequest;
 import com.cognicart.identity_service.service.AuthService;
 import lombok.RequiredArgsConstructor;
@@ -15,5 +16,9 @@ public class AuthController {
     @PostMapping("/register")
     public String register(@RequestBody RegisterRequest request) {
         return authService.register(request);
+    }
+    @PostMapping("/login")
+    public String login(@RequestBody LoginRequest request) {
+        return authService.login(request);
     }
 }
