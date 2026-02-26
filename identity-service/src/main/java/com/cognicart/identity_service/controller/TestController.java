@@ -1,5 +1,6 @@
 package com.cognicart.identity_service.controller;
 
+import com.cognicart.identity_service.dto.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -9,12 +10,20 @@ import org.springframework.web.bind.annotation.RestController;
 public class TestController {
 
     @GetMapping("/user")
-    public String userEndpoint() {
-        return "User endpoint accessed";
+    public ApiResponse<String> userEndpoint() {
+        return ApiResponse.<String>builder()
+                .success(true)
+                .message("User endpoint accessed")
+                .data("User endpoint accessed")
+                .build();
     }
 
     @GetMapping("/admin")
-    public String adminEndpoint() {
-        return "Admin endpoint accessed";
+    public ApiResponse<String> adminEndpoint() {
+        return ApiResponse.<String>builder()
+                .success(true)
+                .message("Admin endpoint accessed")
+                .data("Admin endpoint accessed")
+                .build();
     }
 }

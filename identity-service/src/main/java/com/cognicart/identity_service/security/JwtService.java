@@ -1,45 +1,61 @@
 package com.cognicart.identity_service.security;
 
-import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.*;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Date;
 import javax.crypto.SecretKey;
+import java.util.Date;
 
 @Service
 public class JwtService {
 
-    private final SecretKey key = (SecretKey) Jwts.SIG.HS256.key().build();
+    @Value("${jwt.secret}")
+    private String secret;
 
-    public String generateToken(String email, String role) {
+    @Value("${jwt.access-expiration}")
+    private long accessExpiration;
 
-        Instant now = Instant.now();
+    @Value("${jwt.refresh-expiration}")
+    private long refreshExpiration;
 
-        return Jwts.builder()
-            .subject(email)
-            .claim("role", role)
-            .issuedAt(Date.from(now))
-            .expiration(Date.from(now.plus(Duration.ofHours(1))))
-            .signWith(key)
-            .compact();
+    private SecretKey getSigningKey() {
+        return Keys.hmacShaKeyFor(secret.getBytes());
     }
+
+    public String generateAccessToken(String email, String role) {
+        return Jwts.builder()
+                .subject(email)
+                .claim("role", role)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + accessExpiration))
+                .signWith(getSigningKey())
+                .compact();
+    }
+
+    public String generateRefreshToken(String email) {
+        return Jwts.builder()
+                .subject(email)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + refreshExpiration))
+                .signWith(getSigningKey())
+                .compact();
+    }
+
     public String extractEmail(String token) {
-        return Jwts.parser()
-            .verifyWith(key)
-            .build()
-            .parseSignedClaims(token)
-            .getPayload()
-            .getSubject();
+        return parse(token).getSubject();
     }
 
     public String extractRole(String token) {
-        return (String) Jwts.parser()
-            .verifyWith(key)
-            .build()
-            .parseSignedClaims(token)
-            .getPayload()
-            .get("role");
+        return (String) parse(token).get("role");
+    }
+
+    private Claims parse(String token) {
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 }
